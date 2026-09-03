@@ -1,0 +1,9 @@
+{
+  "name": "Brew Water Calculator",
+  "short_name": "Brew Water",
+  "start_url": "./",
+  "display": "standalone",
+  "theme_color": "#111827",
+  "background_color": "#f3f4f6",
+  "orientation": "portrait"
+}

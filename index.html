@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827"><link rel="manifest" href="manifest.webmanifest">
+<title>Brew Water Calculator</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:#111827;color:white;padding:18px;padding-top:calc(18px + env(safe-area-inset-top));position:sticky;top:0;z-index:10}
+h1{margin:0;font-size:23px}main{max-width:760px;margin:auto;padding:12px}.tabs{display:flex;gap:6px;overflow:auto;margin-bottom:12px}.tabs button{white-space:nowrap}
+button{border:0;border-radius:12px;padding:11px 14px;font-weight:700;background:#111827;color:#fff}.secondary{background:#e5e7eb;color:#111827}
+.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 9px #0001}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;font-weight:650;margin:8px 0 4px}input,select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px;background:white}
+.hidden{display:none}.pill{font-size:12px;font-weight:750;background:#e5e7eb;padding:5px 9px;border-radius:99px}.dose{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #e5e7eb}
+.ok{background:#ecfdf5;color:#065f46;padding:11px;border-radius:10px;margin-top:10px}.warn{background:#fff7ed;color:#9a3412;padding:11px;border-radius:10px;margin-top:10px}
+.muted{color:#6b7280}.actions{display:flex;gap:7px;flex-wrap:wrap}.big{font-size:19px;font-weight:800}
+</style></head>
+<body>
+<header><h1>🍺 Brew Water Calculator</h1><div style="color:#d1d5db">V1.8 • phone edition</div></header>
+<main>
+<div class="tabs"><button onclick="show('water')">1 Water</button><button onclick="show('brew')">2 Brew</button><button onclick="show('target')">3 Target</button><button onclick="show('treatment')">4 Treatment</button></div>
+
+<section id="water"><div class="card"><span class="pill">WATER SOURCE</span><h2>Your water</h2>
+<p class="muted">Enter your real report. Nothing below is pre-populated from the workbook.</p>
+<label>Source name</label><input id="source" placeholder="e.g. Brewery mains">
+<div class="grid"><div><label>Ca mg/L</label><input id="ca" type="number"></div><div><label>Mg mg/L</label><input id="mg" type="number"></div>
+<div><label>Na mg/L</label><input id="na" type="number"></div><div><label>SO₄ mg/L</label><input id="so4" type="number"></div>
+<div><label>Cl mg/L</label><input id="cl" type="number"></div><div><label>HCO₃ mg/L</label><input id="hco3" type="number"></div></div>
+<div class="actions"><button onclick="saveSource()">Save source</button><button class="secondary" onclick="loadSource()">Load source</button></div>
+<div id="sourceMsg" class="muted"></div></div></section>
+
+<section id="brew" class="hidden"><div class="card"><span class="pill">BREW SETUP</span><h2>Liquor & grist</h2>
+<div class="grid"><div><label>Total liquor L</label><input id="totalL" type="number" value="2000"></div>
+<div><label>Mash liquor L</label><input id="mashL" type="number" value="1300"></div>
+<div><label>Sparge liquor L</label><input id="spargeL" type="number" value="700"></div>
+<div><label>Grain bill kg</label><input id="grain" type="number"></div></div>
+<button onclick="saveBrew()">Save brew setup</button></div></section>
+
+<section id="target" class="hidden"><div class="card"><span class="pill">TARGET PROFILE</span><h2>Water profile</h2>
+<select id="profile" onchange="profileChanged()"><option value="">Choose profile</option><option value="pale">Pale Ale</option><option value="mild">Mild Ale</option><option value="lager">American Lager</option><option value="neipa">NEIPA</option><option value="yellowdry">Yellow Dry</option><option value="blackdry">Black Dry</option><option value="custom">Custom</option></select>
+<div class="grid"><div><label>Ca</label><input id="tca" type="number"></div><div><label>Mg</label><input id="tmg" type="number"></div>
+<div><label>Na</label><input id="tna" type="number"></div><div><label>SO₄</label><input id="tso4" type="number"></div>
+<div><label>Cl</label><input id="tcl" type="number"></div><div><label>HCO₃</label><input id="thco3" type="number"></div></div>
+</div></section>
+
+<section id="treatment" class="hidden"><div class="card"><span class="pill">BREW-DAY TREATMENT</span><h2>Results</h2>
+<div class="actions"><button onclick="calculate()">Calculate</button><button class="secondary" onclick="copyResults()">Copy</button></div>
+<div id="headline" class="big" style="margin-top:12px">Ready.</div><div id="results"></div></div>
+<div class="card"><b>Before dosing</b><p class="muted">V1.8 is a field-test PWA. Check your water-report units and actual product strength, and verify mash/sparge pH on brew day.</p></div></section>
+</main>
+<script>
+const profiles={pale:[113,20,25,300,55,35],mild:[50,0,20,40,65,45],lager:[13,6,8,37,13,20],neipa:[105,0,12,75,150,0],yellowdry:[50,10,5,105,45,0],blackdry:[50,15,33,84,39,145]};
+const M=[
+['Gypsum',[61.5,0,0,147.43,0,0]],['CaCl2 anhydrous',[95.4,0,0,0,168.79,0]],['CaCl2 dihydrate',[72.05,0,0,0,127.42,0]],
+['Epsom',[0,26.05,0,102.96,0,0]],['MgCl2',[0,31.57,0,0,92.12,0]],['NaCl',[0,0,103.94,0,160.26,0]],['Baking soda',[0,0,72.31,0,0,191.88]],['Chalk',[105.8,0,0,0,0,322.27]]];
+const ids=['ca','mg','na','so4','cl','hco3'], names=['Ca','Mg','Na','SO₄','Cl','HCO₃'];
+function V(id){return +(document.getElementById(id).value||0)}
+function show(s){['water','brew','target','treatment'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==s))}
+function profileChanged(){let p=profiles[profile.value];if(p)['tca','tmg','tna','tso4','tcl','thco3'].forEach((id,i)=>document.getElementById(id).value=p[i])}
+function saveSource(){localStorage.bwsource=JSON.stringify({name:source.value,ions:ids.map(V)});sourceMsg.textContent='Saved on this phone.'}
+function loadSource(){let x=JSON.parse(localStorage.bwsource||'null');if(!x){sourceMsg.textContent='No saved source.';return}source.value=x.name||'';ids.forEach((id,i)=>document.getElementById(id).value=x.ions[i]||0);sourceMsg.textContent='Loaded.'}
+function saveBrew(){localStorage.bwbrew=JSON.stringify({t:V('totalL'),m:V('mashL'),s:V('spargeL'),g:V('grain')})}
+function solve(){
+ let s=ids.map(V),t=['tca','tmg','tna','tso4','tcl','thco3'].map(V),L=V('totalL')||1,f=3.785/L;
+ let need=t.map((x,i)=>x-s[i]),g=M.map(()=>0);
+ for(let pass=0;pass<300;pass++){let changed=false;
+  for(let j=0;j<M.length;j++){let c=M[j][1].map(x=>x*f);
+   let rem=need.map((x,i)=>x-g.reduce((a,q,k)=>a+q*M[k][1][i]*f,0));
+   let den=c.reduce((a,x)=>a+x*x,0);if(!den)continue;
+   let step=rem.reduce((a,x,i)=>a+x*c[i],0)/den, ng=Math.max(0,g[j]+step);
+   if(Math.abs(ng-g[j])>1e-5){g[j]=ng;changed=true}
+  } if(!changed)break}
+ let a=s.slice();g.forEach((q,j)=>M[j][1].forEach((c,i)=>a[i]+=q*c*f));
+ return {s,t,g,a,r:t.map((x,i)=>x-a[i]),L};
+}
+function calculate(){
+ saveSource();saveBrew();let r=solve(),alk=r.s[5],acid=Math.max(0,alk*r.L/1000/0.01182);
+ let h='<h3>Minerals — total liquor</h3>';
+ r.g.forEach((q,i)=>{if(q>.05)h+=`<div class="dose"><span>${M[i][0]}</span><b>${q.toFixed(1)} g</b></div>`});
+ if(!r.g.some(q=>q>.05))h+='<p class="muted">No mineral addition required.</p>';
+ h+=`<h3>Sparge acid estimate</h3><div class="dose"><span>88% lactic acid</span><b>${acid.toFixed(0)} mL</b></div>`;
+ h+='<h3>Resulting profile</h3>';r.a.forEach((x,i)=>h+=`<div class="dose"><span>${names[i]}</span><b>${x.toFixed(1)} mg/L</b></div>`);
+ h+='<h3>Residual to target</h3>';r.r.forEach((x,i)=>h+=`<div class="dose"><span>${names[i]}</span><b>${x.toFixed(1)} mg/L</b></div>`);
+ h+='<div class="warn">Mash-pH prediction and exact workbook sparge speciation are still being validated. Treat this as a field-test build, not final dosing authority.</div>';
+ headline.textContent=`Calculated for ${r.L.toFixed(0)} L total liquor.`;results.innerHTML=h;
+ window.clip=`Brew Water Calculator V1.8\\nTotal liquor: ${r.L} L\\n`+r.g.map((q,i)=>q>.05?`${M[i][0]}: ${q.toFixed(1)} g`:'').filter(Boolean).join('\\n')+`\\n88% lactic acid estimate: ${acid.toFixed(0)} mL`;
+}
+function copyResults(){if(!window.clip)calculate();navigator.clipboard?.writeText(window.clip)}
+</script></body></html>
